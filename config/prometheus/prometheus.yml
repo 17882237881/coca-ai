@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'coca-backend'
+    scrape_interval: 5s
+    static_configs:
+      # Placeholder for backend service when it's ready
+      # - targets: ['coca-backend:8080'] 
