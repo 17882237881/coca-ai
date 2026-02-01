@@ -8,7 +8,13 @@ package main
 
 import (
 	"coca-ai/internal/handler"
+	"coca-ai/internal/handler/middleware"
 	"coca-ai/internal/ioc"
+	"coca-ai/internal/repository"
+	"coca-ai/internal/repository/cache"
+	"coca-ai/internal/repository/dao"
+	"coca-ai/internal/service"
+	"coca-ai/pkg/jwtx"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,6 +22,24 @@ import (
 
 func InitApp() *gin.Engine {
 	pingHandler := handler.NewPingHandler()
-	engine := ioc.InitWebServer(pingHandler)
+	db := ioc.InitDB()
+	userDAO := dao.NewUserDAO(db)
+	cmdable := ioc.InitRedis()
+	userRepository := repository.NewUserRepository(userDAO, cmdable)
+	userService := service.NewUserService(userRepository)
+	jwtHandler := jwtx.NewJWTHandler()
+	userHandler := handler.NewUserHandler(userService, jwtHandler)
+	sessionDAO := dao.NewSessionDAO(db)
+	sessionRepository := repository.NewSessionRepository(sessionDAO)
+	messageDAO := dao.NewMessageDAO(db)
+	messageCache := cache.NewMessageCache(cmdable)
+	messageRepository := repository.NewMessageRepository(messageDAO, messageCache)
+	chatClient := ioc.InitLLMClient()
+	producer := ioc.InitKafkaProducer()
+	contextService := service.NewContextService(messageRepository, chatClient)
+	chatService := service.NewChatService(sessionRepository, messageRepository, chatClient, producer, contextService)
+	chatHandler := handler.NewChatHandler(chatService)
+	loginJWTMiddleware := middleware.NewLoginJWTMiddleware(jwtHandler, cmdable)
+	engine := ioc.InitWebServer(pingHandler, userHandler, chatHandler, loginJWTMiddleware)
 	return engine
 }

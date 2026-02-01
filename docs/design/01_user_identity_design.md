@@ -93,5 +93,44 @@ sequenceDiagram
 *   **逻辑**: 调用 Service，处理错误，返回 JSON。
 *   **Why**: 也就是“填坑”。步骤 1 挖好了坑，现在把逻辑填进去。
 
-### 步骤 7: 依赖注入 (Wire)
-*   **动作**: 更新 `wire.go`，把上面所有层串起来。
+### 步骤 7: 实现 JWT 与中间件 (Step 7: JWT & Middleware)
+*   **动作**: 引入 JWT 库 (`golang-jwt/jwt`), 实现 Token 的签发与校验。
+*   **Token 策略 (双 Token)**:
+    *   **Access Token**: 短效 (1 小时)，用于高频鉴权，载荷包含业务字段。
+    *   **Refresh Token**: 长效 (7 天)，**仅**用于换取新的 Access Token。
+*   **新接口**: `POST /users/refresh_token`
+*   **关键组件**:
+    *   `pkg/jwtx`: Core 逻辑，支持生成双 Token。
+    *   `internal/handler/middleware/login_jwt.go`: 仅校验 Access Token。
+
+### 步骤 8: 依赖注入 (Wire)
+*   **动作**: 更新 `wire.go`，将所有层串起来。
+
+## 3. JWT 设计详情
+### 3. JWT 设计详情
+### 3.1 Claims 结构
+```go
+type UserClaims struct {
+    jwt.RegisteredClaims
+    Uid   int64  `json:"uid"`
+    Email string `json:"email"`
+    Ssid  string `json:"ssid"` // Session ID
+}
+
+type RefreshClaims struct {
+    jwt.RegisteredClaims
+    Uid   int64  `json:"uid"`
+    Email string `json:"email"`
+    Ssid  string `json:"ssid"` // Session ID
+}
+```
+
+### 3.2 退出登录策略 (Logout Strategy)
+*   **策略**: SSID 黑名单 (Session Block)。
+*   **存储**: Redis。
+*   **Key**: `users:ssid:<ssid>` (Expiration = Configurable, e.g., 7 days)。
+*   **流程**:
+    1.  **Login**: 生成 UUID 作为 SSID，植入 Access/Refresh Token。
+    2.  **Logout**: 提取 Token 中的 SSID，存入 Redis，设置过期时间。
+    3.  **Middleware**: 每次校验 Token 时，检查 Redis 中是否存在该 SSID。如果存在，返回 401。
+

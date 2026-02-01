@@ -1,0 +1,8 @@
+# Docker Build Context Exclusions
+infra/
+web/node_modules/
+node_modules/
+.git/
+*.log
+*.ps1
+test-results/
