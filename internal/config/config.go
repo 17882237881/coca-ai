@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -29,7 +30,16 @@ type MySQLConfig struct {
 
 // RedisConfig Redis 配置
 type RedisConfig struct {
-	Addr string `mapstructure:"addr"`
+	Addr               string `mapstructure:"addr"`
+	Password           string `mapstructure:"password"`
+	DB                 int    `mapstructure:"db"`
+	PoolSize           int    `mapstructure:"pool_size"`
+	MinIdleConns       int    `mapstructure:"min_idle_conns"`
+	DialTimeoutMS      int    `mapstructure:"dial_timeout_ms"`
+	ReadTimeoutMS      int    `mapstructure:"read_timeout_ms"`
+	WriteTimeoutMS     int    `mapstructure:"write_timeout_ms"`
+	MessageCacheMaxLen int    `mapstructure:"message_cache_max_len"`
+	FailOpen           bool   `mapstructure:"fail_open"`
 }
 
 // LLMConfig LLM 配置
@@ -47,7 +57,31 @@ type LoggerConfig struct {
 
 // KafkaConfig Kafka 配置
 type KafkaConfig struct {
-	Brokers []string `mapstructure:"brokers"`
+	Brokers  []string            `mapstructure:"brokers"`
+	DLQTopic string              `mapstructure:"dlq_topic"`
+	Producer KafkaProducerConfig `mapstructure:"producer"`
+	Consumer KafkaConsumerConfig `mapstructure:"consumer"`
+}
+
+type KafkaProducerConfig struct {
+	RequiredAcks   string `mapstructure:"required_acks"`
+	Async          bool   `mapstructure:"async"`
+	BatchSize      int    `mapstructure:"batch_size"`
+	BatchTimeoutMS int    `mapstructure:"batch_timeout_ms"`
+	Compression    string `mapstructure:"compression"`
+	WriteTimeoutMS int    `mapstructure:"write_timeout_ms"`
+	MaxAttempts    int    `mapstructure:"max_attempts"`
+}
+
+type KafkaConsumerConfig struct {
+	GroupID          string `mapstructure:"group_id"`
+	MinBytes         int    `mapstructure:"min_bytes"`
+	MaxBytes         int    `mapstructure:"max_bytes"`
+	MaxWaitMS        int    `mapstructure:"max_wait_ms"`
+	StartOffset      string `mapstructure:"start_offset"`
+	MaxRetry         int    `mapstructure:"max_retry"`
+	RetryBackoffMS   int    `mapstructure:"retry_backoff_ms"`
+	CommitTimeoutMS  int    `mapstructure:"commit_timeout_ms"`
 }
 
 // JaegerConfig Jaeger 配置
@@ -86,7 +120,7 @@ func InitConfig() *Config {
 	}
 	// Kafka 环境变量覆盖
 	if brokers := os.Getenv("KAFKA_BROKERS"); brokers != "" {
-		cfg.Kafka.Brokers = []string{brokers}
+		cfg.Kafka.Brokers = splitAndTrimCSV(brokers)
 	}
 	// Jaeger 环境变量覆盖
 	if host := os.Getenv("JAEGER_AGENT_HOST"); host != "" {
@@ -106,4 +140,16 @@ func Get() *Config {
 		return InitConfig()
 	}
 	return globalConfig
+}
+
+func splitAndTrimCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

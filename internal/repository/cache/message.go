@@ -28,11 +28,12 @@ type CachedMessage struct {
 // MessageCache 消息缓存操作封装
 type MessageCache struct {
 	client redis.Cmdable
+	maxLen int64
 }
 
 // NewMessageCache 创建 MessageCache 实例
-func NewMessageCache(client redis.Cmdable) *MessageCache {
-	return &MessageCache{client: client}
+func NewMessageCache(client redis.Cmdable, maxLen int64) *MessageCache {
+	return &MessageCache{client: client, maxLen: maxLen}
 }
 
 // ==================== 写入操作 ====================
@@ -47,12 +48,15 @@ func (c *MessageCache) Append(ctx context.Context, msg *CachedMessage) error {
 	}
 
 	// RPUSH 添加到列表尾部
-	if err := c.client.RPush(ctx, key, data).Err(); err != nil {
-		return fmt.Errorf("redis RPUSH failed: %w", err)
+	pipe := c.client.TxPipeline()
+	pipe.RPush(ctx, key, data)
+	pipe.Expire(ctx, key, messageTTL)
+	if c.maxLen > 0 {
+		pipe.LTrim(ctx, key, -c.maxLen, -1)
 	}
-
-	// 刷新过期时间
-	c.client.Expire(ctx, key, messageTTL)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("redis pipeline failed: %w", err)
+	}
 
 	return nil
 }
@@ -77,12 +81,15 @@ func (c *MessageCache) BatchAppend(ctx context.Context, messages []*CachedMessag
 	}
 
 	// 批量 RPUSH
-	if err := c.client.RPush(ctx, key, values...).Err(); err != nil {
-		return fmt.Errorf("redis RPUSH failed: %w", err)
+	pipe := c.client.TxPipeline()
+	pipe.RPush(ctx, key, values...)
+	pipe.Expire(ctx, key, messageTTL)
+	if c.maxLen > 0 {
+		pipe.LTrim(ctx, key, -c.maxLen, -1)
 	}
-
-	// 刷新过期时间
-	c.client.Expire(ctx, key, messageTTL)
+	if _, err := pipe.Exec(ctx); err != nil {
+		return fmt.Errorf("redis pipeline failed: %w", err)
+	}
 
 	return nil
 }
@@ -160,6 +167,6 @@ func (c *MessageCache) parseMessages(data []string) ([]*CachedMessage, error) {
 
 // Refresh 刷新缓存过期时间
 func (c *MessageCache) Refresh(ctx context.Context, sessionID int64) error {
-	key := c.buildKey(sessionID)
+	key := c.buildKey(sessionID) 
 	return c.client.Expire(ctx, key, messageTTL).Err()
 }

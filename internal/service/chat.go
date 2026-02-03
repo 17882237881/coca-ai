@@ -6,6 +6,7 @@ import (
 	"coca-ai/internal/mq"
 	"coca-ai/internal/repository"
 	"context"
+	"log"
 	"time"
 )
 
@@ -82,12 +83,14 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID int64, content 
 
 	// 2. 写入 Redis 缓存 (热数据)
 	if err := s.messageRepo.AppendToCache(ctx, userMsg); err != nil {
-		// 缓存失败不阻塞流程，只记录日志
+		log.Printf("[ChatService] append user message cache failed: %v", err)
 	}
 
 	// 3. 发送到 Kafka (异步落库)
 	if s.producer != nil {
-		_ = s.producer.SendMessage(ctx, mq.DomainToEvent(userMsg))
+		if err := s.producer.SendMessage(ctx, mq.DomainToEvent(userMsg)); err != nil {
+			log.Printf("[ChatService] send user message to kafka failed: %v", err)
+		}
 	}
 
 	// 4. 构建 LLM 上下文
@@ -119,12 +122,14 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID int64, content 
 
 	// 7. 写入 Redis 缓存
 	if err := s.messageRepo.AppendToCache(ctx, assistantMsg); err != nil {
-		// 缓存失败不阻塞流程
+		log.Printf("[ChatService] append assistant message cache failed: %v", err)
 	}
 
 	// 8. 发送到 Kafka (异步落库)
 	if s.producer != nil {
-		_ = s.producer.SendMessage(ctx, mq.DomainToEvent(assistantMsg))
+		if err := s.producer.SendMessage(ctx, mq.DomainToEvent(assistantMsg)); err != nil {
+			log.Printf("[ChatService] send assistant message to kafka failed: %v", err)
+		}
 	}
 
 	// 9. 更新会话的 updated_at

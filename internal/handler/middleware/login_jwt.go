@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"coca-ai/internal/config"
 	"coca-ai/pkg/jwtx"
 	"net/http"
 	"strings"
@@ -47,8 +48,10 @@ func (m *LoginJWTMiddleware) Check() gin.HandlerFunc {
 			// 如果是 redis.Nil 说明不在黑名单，通过
 			// 如果是其他错误，也拒绝? 为了安全，Redis挂了最好拒绝访问，或者降级通过。这里选择 Fail-Secure (拒绝)
 			if err != redis.Nil {
-				ctx.AbortWithStatus(http.StatusInternalServerError)
-				return
+				if !config.Get().Redis.FailOpen {
+					ctx.AbortWithStatus(http.StatusInternalServerError)
+					return
+				}
 			}
 		}
 

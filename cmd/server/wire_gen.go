@@ -10,17 +10,16 @@ import (
 	"coca-ai/internal/handler"
 	"coca-ai/internal/handler/middleware"
 	"coca-ai/internal/ioc"
+	"coca-ai/internal/mq"
 	"coca-ai/internal/repository"
-	"coca-ai/internal/repository/cache"
 	"coca-ai/internal/repository/dao"
 	"coca-ai/internal/service"
 	"coca-ai/pkg/jwtx"
-	"github.com/gin-gonic/gin"
 )
 
 // Injectors from wire.go:
 
-func InitApp() *gin.Engine {
+func InitApp() *App {
 	pingHandler := handler.NewPingHandler()
 	db := ioc.InitDB()
 	userDAO := dao.NewUserDAO(db)
@@ -32,8 +31,11 @@ func InitApp() *gin.Engine {
 	sessionDAO := dao.NewSessionDAO(db)
 	sessionRepository := repository.NewSessionRepository(sessionDAO)
 	messageDAO := dao.NewMessageDAO(db)
-	messageCache := cache.NewMessageCache(cmdable)
+	messageCache := ioc.InitMessageCache(cmdable)
 	messageRepository := repository.NewMessageRepository(messageDAO, messageCache)
+	consumer := ioc.InitKafkaConsumer()
+	messagePersistHandler := mq.NewMessagePersistHandler(messageDAO)
+	consumer = ioc.BindKafkaHandlers(consumer, messagePersistHandler)
 	chatClient := ioc.InitLLMClient()
 	producer := ioc.InitKafkaProducer()
 	contextService := service.NewContextService(messageRepository, chatClient)
@@ -41,5 +43,6 @@ func InitApp() *gin.Engine {
 	chatHandler := handler.NewChatHandler(chatService)
 	loginJWTMiddleware := middleware.NewLoginJWTMiddleware(jwtHandler, cmdable)
 	engine := ioc.InitWebServer(pingHandler, userHandler, chatHandler, loginJWTMiddleware)
-	return engine
+	app := NewApp(engine, consumer)
+	return app
 }

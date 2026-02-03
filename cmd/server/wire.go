@@ -7,17 +7,16 @@ import (
 	"coca-ai/internal/handler"
 	"coca-ai/internal/handler/middleware"
 	"coca-ai/internal/ioc"
+	"coca-ai/internal/mq"
 	"coca-ai/internal/repository"
-	"coca-ai/internal/repository/cache"
 	"coca-ai/internal/repository/dao"
 	"coca-ai/internal/service"
 	"coca-ai/pkg/jwtx"
 
-	"github.com/gin-gonic/gin"
 	"github.com/google/wire"
 )
 
-func InitApp() *gin.Engine {
+func InitApp() *App {
 	wire.Build(
 		// 基础组件
 		ioc.InitDB,
@@ -27,6 +26,9 @@ func InitApp() *gin.Engine {
 		ioc.InitLLMClient,
 		// Kafka
 		ioc.InitKafkaProducer,
+		ioc.InitKafkaConsumer,
+		mq.NewMessagePersistHandler,
+		ioc.BindKafkaHandlers,
 		// User 模块
 		dao.NewUserDAO,
 		repository.NewUserRepository,
@@ -38,12 +40,13 @@ func InitApp() *gin.Engine {
 		// Chat 模块
 		dao.NewSessionDAO,
 		dao.NewMessageDAO,
-		cache.NewMessageCache,
+		ioc.InitMessageCache,
 		repository.NewSessionRepository,
 		repository.NewMessageRepository,
 		service.NewContextService,
 		service.NewChatService,
 		handler.NewChatHandler,
+		NewApp,
 	)
 	return nil
 }

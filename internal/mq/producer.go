@@ -12,6 +12,8 @@ import (
 const (
 	// TopicChatMessages 聊天消息 Topic
 	TopicChatMessages = "chat.messages"
+	// TopicChatMessagesDLQ 聊天消息死信 Topic
+	TopicChatMessagesDLQ = "chat.messages.dlq"
 )
 
 // MessageEvent Kafka 消息事件结构
@@ -30,7 +32,14 @@ type Producer struct {
 
 // ProducerConfig 生产者配置
 type ProducerConfig struct {
-	Brokers []string // Kafka Broker 地址列表
+	Brokers      []string // Kafka Broker 地址列表
+	RequiredAcks string
+	Async        bool
+	BatchSize    int
+	BatchTimeout int // 毫秒
+	Compression  string
+	WriteTimeout int // 毫秒
+	MaxAttempts  int
 }
 
 // NewProducer 创建 Kafka 生产者
@@ -38,11 +47,14 @@ func NewProducer(cfg *ProducerConfig) *Producer {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(cfg.Brokers...),
 		Topic:        TopicChatMessages,
-		Balancer:     &kafka.LeastBytes{},
-		BatchSize:    100,                   // 批量发送大小
-		BatchTimeout: 10 * time.Millisecond, // 批量发送超时
-		RequiredAcks: kafka.RequireOne,      // 至少一个副本确认
-		Async:        true,                  // 异步发送
+		Balancer:     &kafka.Hash{}, // 分区器，Hash 策略
+		BatchSize:    orDefaultInt(cfg.BatchSize, 100), // 批量大小
+		BatchTimeout: time.Duration(orDefaultInt(cfg.BatchTimeout, 10)) * time.Millisecond, // 批量超时时间
+		RequiredAcks: parseRequiredAcks(cfg.RequiredAcks), 
+		Async:        cfg.Async, // 是否异步
+		Compression:  parseCompression(cfg.Compression), // 压缩方式
+		WriteTimeout: time.Duration(orDefaultInt(cfg.WriteTimeout, 10000)) * time.Millisecond, // 写入超时时间
+		MaxAttempts:  orDefaultInt(cfg.MaxAttempts, 10), // 最大重试次数
 	}
 
 	return &Producer{writer: writer}
@@ -94,4 +106,32 @@ func (p *Producer) Close() error {
 		return p.writer.Close()
 	}
 	return nil
+}
+
+func parseRequiredAcks(value string) kafka.RequiredAcks {
+	switch value {
+	case "all", "ALL", "require_all":
+		return kafka.RequireAll
+	case "none", "NONE", "require_none":
+		return kafka.RequireNone
+	case "one", "ONE", "require_one":
+		return kafka.RequireOne
+	default:
+		return kafka.RequireAll
+	}
+}
+
+func parseCompression(value string) kafka.Compression {
+	switch value {
+	case "gzip", "GZIP":
+		return kafka.Gzip
+	case "lz4", "LZ4":
+		return kafka.Lz4
+	case "zstd", "ZSTD":
+		return kafka.Zstd
+	case "none", "NONE":
+		return kafka.Compression(0)
+	default:
+		return kafka.Snappy
+	}
 }

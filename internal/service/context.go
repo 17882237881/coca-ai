@@ -9,7 +9,7 @@ import (
 
 const (
 	// 最大上下文消息数 (不包括系统提示和当前输入)
-	MaxContextMessages = 10
+	MaxContextMessages = 20
 	// 触发摘要压缩的阈值
 	SummaryThreshold = 20
 )
@@ -30,9 +30,9 @@ func NewContextService(
 		messageRepo: messageRepo,
 		llmClient:   llmClient,
 		systemPrompt: `你是 Coca AI，一个友好、专业的 AI 助手。
-你可以帮助用户解答问题、提供建议、进行对话。
-请使用简洁、清晰的语言回复用户。
-如果不确定答案，请诚实地表明。`,
+						你可以帮助用户解答问题、提供建议、进行对话。
+						请使用简洁、清晰的语言回复用户。
+						如果不确定答案，请诚实地表明。`,
 	}
 }
 
