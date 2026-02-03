@@ -115,7 +115,7 @@ services:
       - "9094:9094"
     environment:
       KAFKA_BROKER_ID: 1
-      KAFKA_NUM_PARTITIONS: 3 
+      KAFKA_NUM_PARTITIONS: 3
       KAFKA_ZOOKEEPER_CONNECT: coca-zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://coca-kafka:9092,PLAINTEXT_HOST://localhost:9094
@@ -174,8 +174,31 @@ services:
       - MYSQL_PORT=3306
       - REDIS_ADDR=redis:6379
       - QWEN_API_KEY=sk-c233ce3cd2bd4823a987d80582987ddf
+      - USER_SERVICE_ADDR=user-service:9090
+      - KAFKA_BROKERS=coca-kafka:9092
     volumes:
       - ./configs:/app/configs
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - coca_network
+
+  # -------------------------------------------------------------------------
+  # User Service: gRPC Microservice
+  # -------------------------------------------------------------------------
+  user-service:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.user
+    container_name: coca-user-service
+    restart: always
+    ports:
+      - "19091:9090"
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - REDIS_ADDR=redis:6379
     depends_on:
       - mysql
       - redis

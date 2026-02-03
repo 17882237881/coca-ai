@@ -30,9 +30,10 @@ func InitApp() *App {
 		mq.NewMessagePersistHandler,
 		ioc.BindKafkaHandlers,
 		// User 模块
-		dao.NewUserDAO,
-		repository.NewUserRepository,
-		service.NewUserService,
+		// dao.NewUserDAO,  // 也不需要 DAO 和 Repo 了，因为都在 user-service 里
+		// repository.NewUserRepository,
+		// service.NewUserService,
+		ioc.InitUserGRPCClient, // 使用 gRPC 客户端替代本地 Service
 		jwtx.NewJWTHandler,
 		handler.NewUserHandler,
 		middleware.NewLoginJWTMiddleware,
